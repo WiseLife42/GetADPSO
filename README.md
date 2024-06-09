@@ -14,7 +14,7 @@ The script performs the following actions:
     
 ```
 pip install ldap3 python-dateutil
-wget clone https://github.com/WiseLife42/GetADPSO.py
+wget https://raw.githubusercontent.com/WiseLife42/GetADPSO/main/GetADPSO.py
 ```
 
 # Usage
