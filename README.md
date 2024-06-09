@@ -1,10 +1,10 @@
 # Introduction
-This Python script retrieves and displays fine-grained password policies (FGPPs) applied to users and groups in Active Directory. It also displays details of configured SOPs, including attributes such as minimum password length, password complexity, lockout duration, etc.
+This Python script retrieves and displays fine-grained password policies (FGPPs) applied to users and groups in Active Directory. It also displays details of configured PSO, including attributes such as minimum password length, password complexity, lockout duration, etc.
 
 The script performs the following actions:
-* Displays groups with PSOs applied.
-* Displays users with PSOs applied.
-* Displays details of PSOs configured in Active Directory.
+* Displays groups with PSO applied.
+* Displays users with PSO applied.
+* Displays details of PSO configured in Active Directory.
 
 # Installation
 ## Prerequisites
