@@ -21,11 +21,11 @@ wget https://raw.githubusercontent.com/WiseLife42/GetADPSO/main/GetADPSO.py
 ```
 # python3 GetADPSO.py -h
 
-usage: GetADPSO.py [-h] -u USERNAME -p PASSWORD -d DOMAIN
+usage: GetADPSO.py [-h] -u USERNAME -p PASSWORD -d DOMAIN --dc-ip DC_IP
 
 Script to retrieve the msDS-ResultantPSO attribute for all users and groups in Active Directory who have this attribute defined, and show the details of the PSO policies.
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
   -u USERNAME, --username USERNAME
                         Username for Active Directory
@@ -33,6 +33,7 @@ optional arguments:
                         Password for Active Directory
   -d DOMAIN, --domain DOMAIN
                         Domain for Active Directory
+  --dc-ip DC_IP         Domain Controller IP address
 
 ```
 ## Running with a standard account
