@@ -2,6 +2,7 @@
 import argparse
 from ldap3 import Server, Connection, ALL, NTLM, SUBTREE
 from dateutil.relativedelta import relativedelta as rd
+from ldap3.core.exceptions import LDAPSocketOpenError, LDAPBindError
 
 def base_creator(domain):
     return ','.join([f"DC={part}" for part in domain.split('.')])
@@ -11,12 +12,33 @@ def clock(nano):
     sec = int(abs(nano / 10000000))
     return fmt.format(rd(seconds=sec))
 
-def get_user_attributes(username, password, domain):
-    server_address = f'{domain}'
-    user = f'{domain}\\{username}'
+def create_connection(server_address, user, password, use_ssl=False):
+    try:
+        # Attempt connection on port 389 for LDAP, or 636 for LDAPS if use_ssl=True
+        server = Server(server_address, get_info=ALL, use_ssl=use_ssl)
+        conn = Connection(server, user=user, password=password, authentication=NTLM, auto_bind=True)
+        return conn
+    except LDAPSocketOpenError:
+        print(f"Could not connect to {server_address}")
+        return None
+    except LDAPBindError as e:
+        print(f"Failed to bind to {server_address}: {str(e)}")
+        return None
 
-    server = Server(server_address, get_info=ALL)
-    conn = Connection(server, user=user, password=password, authentication=NTLM, auto_bind=True)
+def get_user_attributes(username, password, domain, dc_ip=None):
+    user = f'{domain}\\{username}'
+    server_address_ldap = f'{dc_ip}:389' if dc_ip else f'{domain}:389'
+    server_address_ldaps = f'{dc_ip}:636' if dc_ip else f'{domain}:636'
+
+    # Try connecting first with LDAP, then with LDAPS
+    conn = create_connection(server_address_ldap, user, password)
+    if not conn:
+        print("LDAP on port 389 failed, trying LDAPS on port 636...")
+        conn = create_connection(server_address_ldaps, user, password, use_ssl=True)
+
+    if not conn:
+        print("Both LDAP and LDAPS connection attempts failed.")
+        return
 
     search_base = 'DC=' + ',DC='.join(domain.split('.'))
     search_filter = '(objectClass=user)'
@@ -56,12 +78,20 @@ def get_user_attributes(username, password, domain):
 
     conn.unbind()
 
-def get_group_pso(username, password, domain):
-    server_address = f'{domain}'
+def get_group_pso(username, password, domain, dc_ip=None):
     user = f'{domain}\\{username}'
+    server_address_ldap = f'{dc_ip}:389' if dc_ip else f'{domain}:389'
+    server_address_ldaps = f'{dc_ip}:636' if dc_ip else f'{domain}:636'
 
-    server = Server(server_address, get_info=ALL)
-    conn = Connection(server, user=user, password=password, authentication=NTLM, auto_bind=True)
+    # Try connecting first with LDAP, then with LDAPS
+    conn = create_connection(server_address_ldap, user, password)
+    if not conn:
+        print("LDAP on port 389 failed, trying LDAPS on port 636...")
+        conn = create_connection(server_address_ldaps, user, password, use_ssl=True)
+
+    if not conn:
+        print("Both LDAP and LDAPS connection attempts failed.")
+        return
 
     search_base = 'DC=' + ',DC='.join(domain.split('.'))
     search_filter = '(objectClass=group)'
@@ -101,12 +131,20 @@ def get_group_pso(username, password, domain):
 
     conn.unbind()
 
-def get_pso_details(username, password, domain):
-    server_address = f'{domain}'
+def get_pso_details(username, password, domain, dc_ip=None):
     user = f'{domain}\\{username}'
+    server_address_ldap = f'{dc_ip}:389' if dc_ip else f'{domain}:389'
+    server_address_ldaps = f'{dc_ip}:636' if dc_ip else f'{domain}:636'
 
-    server = Server(server_address, get_info=ALL)
-    conn = Connection(server, user=user, password=password, authentication=NTLM, auto_bind=True)
+    # Try connecting first with LDAP, then with LDAPS
+    conn = create_connection(server_address_ldap, user, password)
+    if not conn:
+        print("LDAP on port 389 failed, trying LDAPS on port 636...")
+        conn = create_connection(server_address_ldaps, user, password, use_ssl=True)
+
+    if not conn:
+        print("Both LDAP and LDAPS connection attempts failed.")
+        return
 
     search_base = f'CN=Password Settings Container,CN=System,{base_creator(domain)}'
     search_filter = '(objectclass=msDS-PasswordSettings)'
@@ -157,17 +195,18 @@ if __name__ == '__main__':
     parser.add_argument('-u', '--username', required=True, help='Username for Active Directory')
     parser.add_argument('-p', '--password', required=True, help='Password for Active Directory')
     parser.add_argument('-d', '--domain', required=True, help='Domain for Active Directory')
+    parser.add_argument('--dc-ip', required=True, help='Domain Controller IP address')
 
     args = parser.parse_args()
 
     print("Groups with PSO applied:")
-    get_group_pso(args.username, args.password, args.domain)
+    get_group_pso(args.username, args.password, args.domain, args.dc_ip)
 
     print("\nUsers with PSO applied:")
-    get_user_attributes(args.username, args.password, args.domain)
+    get_user_attributes(args.username, args.password, args.domain, args.dc_ip)
 
     print("\nPSO Details:")
     try:
-        get_pso_details(args.username, args.password, args.domain)
+        get_pso_details(args.username, args.password, args.domain, args.dc_ip)
     except Exception as e:
         print(f"Could not enumerate details, you likely do not have the privileges to do so! Error: {e}")
