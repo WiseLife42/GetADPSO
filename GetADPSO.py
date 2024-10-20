@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 import argparse
-from ldap3 import Server, Connection, ALL, NTLM, SUBTREE
-from dateutil.relativedelta import relativedelta as rd
+import logging
+from ldap3 import Server, Connection, ALL, NTLM, KERBEROS, SUBTREE
 from ldap3.core.exceptions import LDAPSocketOpenError, LDAPBindError
+from rich.table import Table
+from rich.console import Console
+from dateutil.relativedelta import relativedelta as rd
+
+console = Console()
 
 def base_creator(domain):
     return ','.join([f"DC={part}" for part in domain.split('.')])
@@ -12,32 +17,49 @@ def clock(nano):
     sec = int(abs(nano / 10000000))
     return fmt.format(rd(seconds=sec))
 
-def create_connection(server_address, user, password, use_ssl=False):
+def setup_logging(debug=False):
+    logging_level = logging.DEBUG if debug else logging.INFO
+    logging.basicConfig(level=logging_level, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def create_connection(server_address, user, password, use_ssl=False, auth_method=NTLM, ccache_file=None, verbose=False):
     try:
-        # Attempt connection on port 389 for LDAP, or 636 for LDAPS if use_ssl=True
+        # Utiliser LDAPS (port 636) si use_ssl=True
         server = Server(server_address, get_info=ALL, use_ssl=use_ssl)
-        conn = Connection(server, user=user, password=password, authentication=NTLM, auto_bind=True)
+        if auth_method == KERBEROS and ccache_file:
+            if verbose:
+                console.log(f"[yellow][D][/yellow] Using Kerberos with ccache file: {ccache_file}")
+            conn = Connection(server, authentication=KERBEROS, sasl_mechanism='GSSAPI')
+        else:
+            conn = Connection(server, user=user, password=password, authentication=auth_method, auto_bind=True)
+
+        if verbose:
+            console.log(f"[green][+][/green] Connected to {server_address} with {auth_method}")
         return conn
     except LDAPSocketOpenError:
-        print(f"Could not connect to {server_address}")
+        if verbose:
+            console.log(f"[bold red][-][/bold red] Could not connect to {server_address}")
         return None
     except LDAPBindError as e:
-        print(f"Failed to bind to {server_address}: {str(e)}")
+        if verbose:
+            console.log(f"[bold red][-][/bold red] Failed to bind to {server_address}: {str(e)}")
         return None
 
-def get_user_attributes(username, password, domain, dc_ip=None):
-    user = f'{domain}\\{username}'
-    server_address_ldap = f'{dc_ip}:389' if dc_ip else f'{domain}:389'
-    server_address_ldaps = f'{dc_ip}:636' if dc_ip else f'{domain}:636'
+def get_user_attributes(username, password, domain, dc_host=None, kerberos=False, ccache_file=None, verbose=False):
+    user = f'{domain}\\{username}' if not kerberos else None
+    server_address = f'{dc_host}:389' if dc_host else f'{domain}:389'
 
-    # Try connecting first with LDAP, then with LDAPS
-    conn = create_connection(server_address_ldap, user, password)
+    auth_method = KERBEROS if kerberos else NTLM
+
+    conn = create_connection(server_address, user, password, auth_method=auth_method, ccache_file=ccache_file, verbose=verbose)
     if not conn:
-        print("LDAP on port 389 failed, trying LDAPS on port 636...")
-        conn = create_connection(server_address_ldaps, user, password, use_ssl=True)
+        if verbose:
+            console.log("[bold red][-][/bold red] LDAP on port 389 failed, trying LDAPS on port 636...")
+        server_address = f'{dc_host}:636' if dc_host else f'{domain}:636'
+        conn = create_connection(server_address, user, password, use_ssl=True, auth_method=auth_method, ccache_file=ccache_file, verbose=verbose)
 
     if not conn:
-        print("Both LDAP and LDAPS connection attempts failed.")
+        if verbose:
+            console.log("[bold red][-][/bold red] Both LDAP and LDAPS connection attempts failed.")
         return
 
     search_base = 'DC=' + ',DC='.join(domain.split('.'))
@@ -48,9 +70,9 @@ def get_user_attributes(username, password, domain, dc_ip=None):
                 search_scope=SUBTREE,
                 attributes=['sAMAccountName', 'msDS-ResultantPSO'])
 
-    results = []
-    max_user_length = len("Users")
-    max_pso_length = len("PSO")
+    table = Table(title="Users with PSO Applied")
+    table.add_column("Users", justify="left", style="cyan", no_wrap=True)
+    table.add_column("PSO", justify="left", style="green")
 
     for entry in conn.entries:
         if 'msDS-ResultantPSO' in entry and entry['msDS-ResultantPSO']:
@@ -58,39 +80,29 @@ def get_user_attributes(username, password, domain, dc_ip=None):
             msds_resultant_pso = str(entry['msDS-ResultantPSO'])
             pso_name = msds_resultant_pso.split(',')[0].split('=')[1]
 
-            results.append((sam_account_name, pso_name))
+            table.add_row(sam_account_name, pso_name)
 
-            max_user_length = max(max_user_length, len(sam_account_name))
-            max_pso_length = max(max_pso_length, len(pso_name))
-
-    # ANSI escape sequences for coloring
-    GREEN = '\033[92m'
-    RESET = '\033[0m'
-
-    header = f"| {'Users':<{max_user_length}} | {'PSO':<{max_pso_length}} |"
-    separator = f"| {'-'*max_user_length} | {'-'*max_pso_length} |"
-
-    print(header)
-    print(separator)
-
-    for sam_account_name, pso_name in results:
-        print(f"| {GREEN}{sam_account_name:<{max_user_length}}{RESET} | {pso_name:<{max_pso_length}} |")
-
+    console.print(table)
+    if verbose:
+        console.log("[green][+][/green] Successfully retrieved user PSO attributes.")
     conn.unbind()
 
-def get_group_pso(username, password, domain, dc_ip=None):
-    user = f'{domain}\\{username}'
-    server_address_ldap = f'{dc_ip}:389' if dc_ip else f'{domain}:389'
-    server_address_ldaps = f'{dc_ip}:636' if dc_ip else f'{domain}:636'
+def get_group_pso(username, password, domain, dc_host=None, kerberos=False, ccache_file=None, verbose=False):
+    user = f'{domain}\\{username}' if not kerberos else None
+    server_address = f'{dc_host}:389' if dc_host else f'{domain}:389'
 
-    # Try connecting first with LDAP, then with LDAPS
-    conn = create_connection(server_address_ldap, user, password)
+    auth_method = KERBEROS if kerberos else NTLM
+
+    conn = create_connection(server_address, user, password, auth_method=auth_method, ccache_file=ccache_file, verbose=verbose)
     if not conn:
-        print("LDAP on port 389 failed, trying LDAPS on port 636...")
-        conn = create_connection(server_address_ldaps, user, password, use_ssl=True)
+        if verbose:
+            console.log("[bold red][-][/bold red] LDAP on port 389 failed, trying LDAPS on port 636...")
+        server_address = f'{dc_host}:636' if dc_host else f'{domain}:636'
+        conn = create_connection(server_address, user, password, use_ssl=True, auth_method=auth_method, ccache_file=ccache_file, verbose=verbose)
 
     if not conn:
-        print("Both LDAP and LDAPS connection attempts failed.")
+        if verbose:
+            console.log("[bold red][-][/bold red] Both LDAP and LDAPS connection attempts failed.")
         return
 
     search_base = 'DC=' + ',DC='.join(domain.split('.'))
@@ -101,9 +113,9 @@ def get_group_pso(username, password, domain, dc_ip=None):
                 search_scope=SUBTREE,
                 attributes=['cn', 'msDS-PSOApplied'])
 
-    results = []
-    max_name_length = len("Groups")
-    max_pso_length = len("PSO")
+    table = Table(title="Groups with PSO Applied")
+    table.add_column("Groups", justify="left", style="cyan", no_wrap=True)
+    table.add_column("PSO", justify="left", style="green")
 
     for entry in conn.entries:
         if 'msDS-PSOApplied' in entry and entry['msDS-PSOApplied']:
@@ -111,39 +123,23 @@ def get_group_pso(username, password, domain, dc_ip=None):
             msds_pso_applied = str(entry['msDS-PSOApplied'])
             pso_name = msds_pso_applied.split(',')[0].split('=')[1]
 
-            results.append((name, pso_name))
+            table.add_row(name, pso_name)
 
-            max_name_length = max(max_name_length, len(name))
-            max_pso_length = max(max_pso_length, len(pso_name))
-
-    # ANSI escape sequences for coloring
-    GREEN = '\033[92m'
-    RESET = '\033[0m'
-
-    header = f"| {'Groups':<{max_name_length}} | {'PSO':<{max_pso_length}} |"
-    separator = f"| {'-'*max_name_length} | {'-'*max_pso_length} |"
-
-    print(header)
-    print(separator)
-
-    for name, pso_name in results:
-        print(f"| {GREEN}{name:<{max_name_length}}{RESET} | {pso_name:<{max_pso_length}} |")
-
+    console.print(table)
+    if verbose:
+        console.log("[green][+][/green] Successfully retrieved group PSO attributes.")
     conn.unbind()
 
-def get_pso_details(username, password, domain, dc_ip=None):
+def get_pso_details(username, password, domain, dc_host=None, verbose=False):
     user = f'{domain}\\{username}'
-    server_address_ldap = f'{dc_ip}:389' if dc_ip else f'{domain}:389'
-    server_address_ldaps = f'{dc_ip}:636' if dc_ip else f'{domain}:636'
+    server_address = f'{dc_host}:636' if dc_host else f'{domain}:636'  # Utiliser LDAPS (port 636)
 
-    # Try connecting first with LDAP, then with LDAPS
-    conn = create_connection(server_address_ldap, user, password)
-    if not conn:
-        print("LDAP on port 389 failed, trying LDAPS on port 636...")
-        conn = create_connection(server_address_ldaps, user, password, use_ssl=True)
-
-    if not conn:
-        print("Both LDAP and LDAPS connection attempts failed.")
+    server = Server(server_address, get_info=ALL, use_ssl=True)  # Utiliser LDAPS
+    try:
+        conn = Connection(server, user=user, password=password, authentication=NTLM, auto_bind=True)
+    except LDAPBindError as e:
+        if verbose:
+            console.print(f"[bold red][-][/bold red] Failed to bind using LDAPS: {str(e)}")
         return
 
     search_base = f'CN=Password Settings Container,CN=System,{base_creator(domain)}'
@@ -160,53 +156,63 @@ def get_pso_details(username, password, domain, dc_ip=None):
                 ])
 
     if len(conn.entries) > 0:
-        # ANSI escape sequences for coloring
-        BLUE = '\033[94m'
-        CYAN = '\033[96m'
-        RESET = '\033[0m'
-
         for entry in conn.entries:
-            print(f"Policy Name: {BLUE}{entry['name'].value}{RESET}")
+            # Créer un tableau distinct pour chaque PSO
+            table = Table(title=f"PSO Details: {entry['name'].value}", show_header=True, header_style="bold magenta")
+            table.add_column("Attribute", justify="left", style="cyan")
+            table.add_column("Value", justify="left", style="green")
+
+            table.add_row("Policy Name", entry['name'].value)
             if 'description' in entry:
-                print(f"Description: {entry['description'].value}")
-            print(f"Minimum Password Length: {CYAN}{entry['msds-minimumpasswordlength'].value}{RESET}")
-            print(f"Password History Length: {CYAN}{entry['msds-passwordhistorylength'].value}{RESET}")
-            print(f"Lockout Threshold: {CYAN}{entry['msds-lockoutthreshold'].value}{RESET}")
-            print(f"Observation Window: {clock(int(entry['msds-lockoutobservationwindow'].value)) if 'msds-lockoutobservationwindow' in entry else 'N/A'}")
-            print(f"Lockout Duration: {clock(int(entry['msds-lockoutduration'].value)) if 'msds-lockoutduration' in entry else 'N/A'}")
-            print(f"Complexity Enabled: {entry['msds-passwordcomplexityenabled'].value}")
-            print(f"Minimum Password Age: {clock(int(entry['msds-minimumpasswordage'].value)) if 'msds-minimumpasswordage' in entry else 'N/A'}")
-            print(f"Maximum Password Age: {clock(int(entry['msds-maximumpasswordage'].value)) if 'msds-maximumpasswordage' in entry else 'N/A'}")
-            print(f"Reversible Encryption: {entry['msds-passwordreversibleencryptionenabled'].value}")
-            print(f"Precedence: {CYAN}{entry['msds-passwordsettingsprecedence'].value}{RESET}")
+                table.add_row("Description", entry['description'].value)
+
+            table.add_row("Minimum Password Length", str(entry['msds-minimumpasswordlength'].value))
+            table.add_row("Password History Length", str(entry['msds-passwordhistorylength'].value))
+            table.add_row("Lockout Threshold", str(entry['msds-lockoutthreshold'].value))
+            table.add_row("Observation Window", clock(int(entry['msds-lockoutobservationwindow'].value)) if 'msds-lockoutobservationwindow' in entry else 'N/A')
+            table.add_row("Lockout Duration", clock(int(entry['msds-lockoutduration'].value)) if 'msds-lockoutduration' in entry else 'N/A')
+            table.add_row("Password Complexity Enabled", str(entry['msds-passwordcomplexityenabled'].value))
+            table.add_row("Minimum Password Age", clock(int(entry['msds-minimumpasswordage'].value)) if 'msds-minimumpasswordage' in entry else 'N/A')
+            table.add_row("Maximum Password Age", clock(int(entry['msds-maximumpasswordage'].value)) if 'msds-maximumpasswordage' in entry else 'N/A')
+            table.add_row("Reversible Encryption Enabled", str(entry['msds-passwordreversibleencryptionenabled'].value))
+            table.add_row("Password Settings Precedence", str(entry['msds-passwordsettingsprecedence'].value))
+
             if 'msds-psoappliesto' in entry:
                 for dn in entry['msds-psoappliesto']:
-                    print(f"Policy Applies to: {dn}")
-            print("")
+                    table.add_row("Policy Applies to", dn)
+
+            # Afficher chaque tableau distinctement
+            console.print(table)
+
+        if verbose:
+            console.log("[green][+][/green] Successfully retrieved PSO details.")
     else:
-        print("Could not enumerate details, you likely do not have the privileges to do so!")
+        if verbose:
+            console.print("[bold red]Could not enumerate details, you likely do not have the privileges to do so![/bold red]")
 
     conn.unbind()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description='Script to retrieve the msDS-ResultantPSO attribute for all users and groups in Active Directory who have this attribute defined, and show the details of the PSO policies.'
+        description='Script to retrieve the msDS-ResultantPSO attribute for all users and groups in Active Directory, and show the details of PSO policies.'
     )
-    parser.add_argument('-u', '--username', required=True, help='Username for Active Directory')
-    parser.add_argument('-p', '--password', required=True, help='Password for Active Directory')
+    parser.add_argument('-u', '--username', help='Username for Active Directory', required=True)
+    parser.add_argument('-p', '--password', help='Password for Active Directory', required=True)
     parser.add_argument('-d', '--domain', required=True, help='Domain for Active Directory')
-    parser.add_argument('--dc-ip', required=True, help='Domain Controller IP address')
+    parser.add_argument('--dc-host', help='Domain Controller hostname or IP address')
+    parser.add_argument('--kerberos', action='store_true', help='Use Kerberos authentication')
+    parser.add_argument('--ccache', help='Path to Kerberos ccache file')
+    parser.add_argument('-v', '--debug', action='store_true', help='Enable debug logging for more details')
 
     args = parser.parse_args()
 
-    print("Groups with PSO applied:")
-    get_group_pso(args.username, args.password, args.domain, args.dc_ip)
+    setup_logging(args.debug)
 
-    print("\nUsers with PSO applied:")
-    get_user_attributes(args.username, args.password, args.domain, args.dc_ip)
+    # Display groups with PSO applied
+    get_group_pso(args.username, args.password, args.domain, args.dc_host, kerberos=args.kerberos, ccache_file=args.ccache, verbose=args.debug)
 
-    print("\nPSO Details:")
-    try:
-        get_pso_details(args.username, args.password, args.domain, args.dc_ip)
-    except Exception as e:
-        print(f"Could not enumerate details, you likely do not have the privileges to do so! Error: {e}")
+    # Display users with PSO applied
+    get_user_attributes(args.username, args.password, args.domain, args.dc_host, kerberos=args.kerberos, ccache_file=args.ccache, verbose=args.debug)
+
+    # Display PSO details
+    get_pso_details(args.username, args.password, args.domain, dc_host=args.dc_host, verbose=args.debug)
