@@ -22,7 +22,7 @@ wget https://raw.githubusercontent.com/WiseLife42/GetADPSO/main/GetADPSO.py
 ```
 # python3 GetADPSO.py -h
 
-usage: GetADPSO_v4.py [-h] -u USERNAME -p PASSWORD -d DOMAIN [--dc-host DC_HOST] [--kerberos] [--ccache CCACHE] [-v]
+usage: GetADPSO.py [-h] -u USERNAME -p PASSWORD -d DOMAIN [--dc-host DC_HOST] [--kerberos] [--ccache CCACHE] [-v]
 
 Script to retrieve the msDS-ResultantPSO attribute for all users and groups in Active Directory, and show the details of PSO policies.
 
