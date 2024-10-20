@@ -11,9 +11,10 @@ The script performs the following actions:
 * Python3
 * ldap3
 * python-dateutil
+* rich
     
 ```
-pip install ldap3 python-dateutil
+pip install ldap3 python-dateutil rich
 wget https://raw.githubusercontent.com/WiseLife42/GetADPSO/main/GetADPSO.py
 ```
 
@@ -21,9 +22,9 @@ wget https://raw.githubusercontent.com/WiseLife42/GetADPSO/main/GetADPSO.py
 ```
 # python3 GetADPSO.py -h
 
-usage: GetADPSO.py [-h] -u USERNAME -p PASSWORD -d DOMAIN --dc-ip DC_IP
+usage: GetADPSO_v4.py [-h] -u USERNAME -p PASSWORD -d DOMAIN [--dc-host DC_HOST] [--kerberos] [--ccache CCACHE] [-v]
 
-Script to retrieve the msDS-ResultantPSO attribute for all users and groups in Active Directory who have this attribute defined, and show the details of the PSO policies.
+Script to retrieve the msDS-ResultantPSO attribute for all users and groups in Active Directory, and show the details of PSO policies.
 
 options:
   -h, --help            show this help message and exit
@@ -33,7 +34,10 @@ options:
                         Password for Active Directory
   -d DOMAIN, --domain DOMAIN
                         Domain for Active Directory
-  --dc-ip DC_IP         Domain Controller IP address
+  --dc-host DC_HOST     Domain Controller hostname or IP address
+  --kerberos            Use Kerberos authentication
+  --ccache CCACHE       Path to Kerberos ccache file
+  -v, --debug           Enable debug logging for more details
 
 ```
 ## Running with a standard account
