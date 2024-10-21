@@ -1,0 +1,1 @@
+from .getadpso import main
