@@ -41,10 +41,16 @@ options:
 
 ```
 ## Running with a standard account
-![image](https://github.com/WiseLife42/GetADPSO/assets/80531900/25a6732f-9870-4c75-a093-44ad1b54c54b)
+![image](https://github.com/user-attachments/assets/963d5c11-30fe-4152-93a8-7361a4fa2530)
+
+## Running with a standard account (verbose)
+![image](https://github.com/user-attachments/assets/2b2ed4ca-47e6-4c98-b1d0-be4af6c9963b)
 
 ## Running with an administrator account
-![image](https://github.com/WiseLife42/GetADPSO/assets/80531900/8f7e732b-c19a-45c7-b1b8-2d45eeb34191)
+![image](https://github.com/user-attachments/assets/532fe012-794d-4e11-a3b0-5b2db31279e9)
+
+## Running with an administrator account (verbose)
+![image](https://github.com/user-attachments/assets/9dc3f4f2-f4f7-4e80-8c78-8b9693d1d1c4)
 
 
 
