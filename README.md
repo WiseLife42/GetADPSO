@@ -8,14 +8,12 @@ The script performs the following actions:
 
 # Installation
 ## Prerequisites
-* Python3
-* ldap3
-* python-dateutil
-* pycryptodome
+* requirements.txt
     
 ```
-pip install ldap3 python-dateutil pycryptodome 
-wget https://raw.githubusercontent.com/WiseLife42/GetADPSO/main/GetADPSO.py
+git clone https://github.com/WiseLife42/GetADPSO
+cd GetADPSO/
+pip install -r requirements.txt
 ```
 
 # Usage
