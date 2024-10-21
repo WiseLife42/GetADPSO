@@ -1,0 +1,5 @@
+ldap3
+python-dateutil
+pycryptodome
+rich
+setuptools
