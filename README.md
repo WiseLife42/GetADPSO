@@ -11,10 +11,10 @@ The script performs the following actions:
 * Python3
 * ldap3
 * python-dateutil
-* rich
+* pycryptodome
     
 ```
-pip install ldap3 python-dateutil rich
+pip install ldap3 python-dateutil pycryptodome 
 wget https://raw.githubusercontent.com/WiseLife42/GetADPSO/main/GetADPSO.py
 ```
 
