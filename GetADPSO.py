@@ -132,14 +132,22 @@ def get_group_pso(username, password, domain, dc_host=None, kerberos=False, ccac
 
 def get_pso_details(username, password, domain, dc_host=None, verbose=False):
     user = f'{domain}\\{username}'
-    server_address = f'{dc_host}:636' if dc_host else f'{domain}:636'  # Utiliser LDAPS (port 636)
+    server_address = f'{dc_host}:389' if dc_host else f'{domain}:389'  # Essayer d'abord sur le port 389 (LDAP)
 
-    server = Server(server_address, get_info=ALL, use_ssl=True)  # Utiliser LDAPS
-    try:
-        conn = Connection(server, user=user, password=password, authentication=NTLM, auto_bind=True)
-    except LDAPBindError as e:
+    auth_method = NTLM
+
+    # Essayer la connexion sur le port LDAP (389)
+    conn = create_connection(server_address, user, password, auth_method=auth_method, verbose=verbose)
+    if not conn:
         if verbose:
-            console.print(f"[bold red][-][/bold red] Failed to bind using LDAPS: {str(e)}")
+            console.log("[bold red][-][/bold red] LDAP on port 389 failed, trying LDAPS on port 636...")
+        # Si la connexion LDAP échoue, tenter avec LDAPS sur le port 636
+        server_address = f'{dc_host}:636' if dc_host else f'{domain}:636'
+        conn = create_connection(server_address, user, password, use_ssl=True, auth_method=auth_method, verbose=verbose)
+
+    if not conn:
+        if verbose:
+            console.log("[bold red][-][/bold red] Both LDAP and LDAPS connection attempts failed.")
         return
 
     search_base = f'CN=Password Settings Container,CN=System,{base_creator(domain)}'
