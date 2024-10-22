@@ -6,7 +6,7 @@ def parse_requirements():
 
 setup(
     name="getadpso",
-    version="0.3.0",
+    version="0.4.0",
     description="A Python package to retrieve msDS-ResultantPSO and msDS-PSOApplied attributes from Active Directory.",
     author="WiseLife",
     author_email="",
