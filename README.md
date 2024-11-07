@@ -7,8 +7,6 @@ The script performs the following actions:
 * Displays details of PSO configured in Active Directory.
 
 # Installation
-## Prerequisites
-* requirements.txt
 
 ### With source :
 ```
