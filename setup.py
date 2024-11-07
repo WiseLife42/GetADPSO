@@ -5,12 +5,12 @@ def parse_requirements():
         return f.read().splitlines()
 
 setup(
-    name="getadpso",
-    version="0.4.0",
+    name="GetADPSO",
+    version="0.2",
     description="A Python package to retrieve msDS-ResultantPSO and msDS-PSOApplied attributes from Active Directory.",
     author="WiseLife",
     author_email="",
-    url="https://github.com/WiseLife42/GetADPSO",
+    url="https://github.com/toncompte/getadpso",
     packages=find_packages(),
     install_requires=parse_requirements(),
     classifiers=[
