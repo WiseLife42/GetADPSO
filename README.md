@@ -14,7 +14,7 @@ The script performs the following actions:
 ```
 git clone https://github.com/WiseLife42/GetADPSO
 cd GetADPSO/
-pip install -r requirements.txt
+pip install .
 ```
 
 ### With pip :
