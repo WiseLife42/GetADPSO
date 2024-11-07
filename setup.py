@@ -10,7 +10,7 @@ setup(
     description="A Python package to retrieve msDS-ResultantPSO and msDS-PSOApplied attributes from Active Directory.",
     author="WiseLife",
     author_email="",
-    url="https://github.com/toncompte/getadpso",
+    url="https://github.com/WiseLife42/GetADPSO",
     packages=find_packages(),
     install_requires=parse_requirements(),
     classifiers=[
