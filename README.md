@@ -9,18 +9,24 @@ The script performs the following actions:
 # Installation
 ## Prerequisites
 * requirements.txt
-    
+
+### With source :
 ```
 git clone https://github.com/WiseLife42/GetADPSO
 cd GetADPSO/
 pip install -r requirements.txt
 ```
 
+### With pip :
+```
+pip install GetADPSO
+```
+
 # Usage
 ```
-# python3 getadpso.py -h
+# getadpso
 
-usage: getadpso.py [-h] -u USERNAME -p PASSWORD -d DOMAIN [--dc-host DC_HOST] [--kerberos] [--ccache CCACHE] [-v]
+usage: getadpso [-h] -u USERNAME -p PASSWORD -d DOMAIN [--dc-host DC_HOST] [--kerberos] [--ccache CCACHE] [-v]
 
 Script to retrieve the msDS-ResultantPSO attribute for all users and groups in Active Directory, and show the details of PSO policies.
 
